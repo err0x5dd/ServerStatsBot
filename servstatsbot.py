@@ -70,6 +70,14 @@ class YourBot(telepot.Bot):
         print("Your chat_id:" + str(chat_id)) # this will tell you your chat_id
         if chat_id in adminchatid:  # Store adminchatid variable in tokens.py
             if content_type == 'text':
+                if msg['text'] == '/help' and chat_id not in shellexecution:
+                    bot.sendChatAction(chat_id, 'typing')
+                    reply = "/stats - gives summed statistics about memory \\ disk \\ processes (will improve)\n" + \
+                            "/shell - goes into the mode of executing shell commands & sends you the output\n" + \
+                            "/memgraph - plots a graph of memory usage for a past period and sends you a picture of the graph\n" + \
+                            "/setmem - set memory threshold (%) to monitor and notify if memory usage goes above it\n" + \
+                            "/setpoll - set polling interval in seconds (higher than 10)\n"
+                    bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
                 if msg['text'] == '/stats' and chat_id not in shellexecution:
                     bot.sendChatAction(chat_id, 'typing')
                     memory = psutil.virtual_memory()
