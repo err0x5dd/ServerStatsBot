@@ -1,11 +1,11 @@
 [Unit]
-Description=ServStatsBot is a telegram monitoring bot
+Description=ServStatsBot - Telegram Monitoring Bot
 After=network.target
 
 [Service]
 Type=simple
 User=telegram
-ExecStart=/usr/bin/python3 /opt/telegram-monitoring/servstatsbot.py
+ExecStart=/opt/telegram-monitoring/servstatsbot.py
 
 [Install]
 WantedBy=multi-user.target

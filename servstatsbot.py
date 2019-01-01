@@ -1,3 +1,5 @@
+#! /usr/bin/python3
+
 from tokens import *
 import matplotlib
 matplotlib.use("Agg") # has to be before any other matplotlibs imports to set a "headless" backend
@@ -19,7 +21,8 @@ import telepot
 
 
 memorythreshold = 85  # If memory usage more this %
-poll = 300  # seconds
+cputhreshold = 85  # if total cpu usage more than this
+poll = 30  # seconds
 
 shellexecution = []
 timelist = []
@@ -57,7 +60,6 @@ def plotmemgraph(memlist, xaxis, tmperiod):
     f = open('/tmp/graph.png', 'rb')  # some file on local disk
     return f
 
-
 class YourBot(telepot.Bot):
     def __init__(self, *args, **kwargs):
         super(YourBot, self).__init__(*args, **kwargs)
@@ -80,38 +82,44 @@ class YourBot(telepot.Bot):
                     bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
                 if msg['text'] == '/stats' and chat_id not in shellexecution:
                     bot.sendChatAction(chat_id, 'typing')
-                    memory = psutil.virtual_memory()
-                    disk = psutil.disk_usage('/')
+                    # time
                     boottime = datetime.fromtimestamp(psutil.boot_time())
                     now = datetime.now()
-                    timedif = "Online for: %.1f Hours" % (((now - boottime).total_seconds()) / 3600)
-                    memtotal = "Total memory: %.2f GB " % (memory.total / 1000000000)
-                    memavail = "Available memory: %.2f GB" % (memory.available / 1000000000)
-                    memuseperc = "Used memory: " + str(memory.percent) + " %"
-                    diskused = "Disk used: " + str(disk.percent) + " %"
-                    pids = psutil.pids()
-                    pidsreply = ''
-                    procs = {}
-                    for pid in pids:
-                        p = psutil.Process(pid)
-                        try:
-                            pmem = p.memory_percent()
-                            if pmem > 0.5:
-                                if p.name() in procs:
-                                    procs[p.name()] += pmem
-                                else:
-                                    procs[p.name()] = pmem
-                        except:
-                            print("Hm")
-                    sortedprocs = sorted(procs.items(), key=operator.itemgetter(1), reverse=True)
-                    for proc in sortedprocs:
-                        pidsreply += proc[0] + " " + ("%.2f" % proc[1]) + " %\n"
+                    timedif = "Uptime: %.1f Hours" % (((now - boottime).total_seconds()) / 3600)
+                    # memory
+                    memory = psutil.virtual_memory()
+                    memtotal = "%.2f" % (memory.total / 1024 / 1024 / 1024)
+                    #memavail = "%.2f" % (memory.available / 1024 / 1024 / 1024)
+                    memused = "%.2f" % (memory.used / 1024 / 1024 / 1024)
+                    memuseperc = "(" + str(memory.percent) + " %)"
+                    mem = "Memory: " + memused + "/" + memtotal + " GiB " + memuseperc
+                    # disk
+                    diskparts = psutil.disk_partitions()
+                    diskusage = "Disk usage per mount:\n"
+                    for part in diskparts:
+                        mount = part.mountpoint
+                        usage = psutil.disk_usage(mount)
+                        usagetotal = "%.2f" % (usage.total / 1024 / 1024 / 1024)
+                        #usagefree = "%.2f" % (usage.free / 1024 / 1024 / 1024)
+                        usageused = "%.2f" % (usage.used / 1024 / 1024 / 1024)
+                        usageperc = "(" + str(usage.percent) + " %)"
+                        diskusage += mount + " " + usageused + "/" + usagetotal + " GiB " + usageperc + "\n"
+                    # cpu
+                    cpuperc = psutil.cpu_percent(percpu=True)
+                    cpuusage = "CPU Usage:\n"
+                    cpuid = 0
+                    for cpu in cpuperc:
+                        cpuusage += "CPU" + str(cpuid) + ": " + str(cpu) + " %\n"
+                        cpuid += 1
+                    cpuusage += "CPU Total: " + str(psutil.cpu_percent()) + " %"
+                    # output
                     reply = timedif + "\n" + \
-                            memtotal + "\n" + \
-                            memavail + "\n" + \
-                            memuseperc + "\n" + \
-                            diskused + "\n\n" + \
-                            pidsreply
+                            "---\n" + \
+                            cpuusage + "\n" + \
+                            "---\n" + \
+                            mem + "\n" + \
+                            "---\n" + \
+                            diskusage + "\n"
                     bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
                 elif msg['text'] == "Stop":
                     clearall(chat_id)
@@ -180,6 +188,7 @@ while 1:
         timenow = datetime.now()
         memck = psutil.virtual_memory()
         mempercent = memck.percent
+        cpupercent = psutil.cpu_percent()
         if len(memlist) > 300:
             memq = collections.deque(memlist)
             memq.append(mempercent)
@@ -190,13 +199,16 @@ while 1:
             xaxis.append(xx)
             xx += 1
             memlist.append(mempercent)
-        memfree = memck.available / 1000000
+        memfree = (memck.available / 1024 / 1024 / 1024)
         if mempercent > memorythreshold:
-            memavail = "Available memory: %.2f GB" % (memck.available / 1000000000)
+            memavail = "Available memory: %.2f GiB" % (memck.available / 1024 / 1024 / 1024)
             graphend = datetime.now()
             tmperiod = "Last %.2f hours" % ((graphend - graphstart).total_seconds() / 3600)
             for adminid in adminchatid:
                 bot.sendMessage(adminid, "CRITICAL! LOW MEMORY!\n" + memavail)
                 bot.sendPhoto(adminid, plotmemgraph(memlist, xaxis, tmperiod))
+        if cpupercent > cputhreshold:
+            for adminid in adminchatid:
+                bot.sendMessage(adminid, "CRITICAL! HIGH CPU!\n" + str(cpupercent) + " %")
     time.sleep(10)  # 10 seconds
     tr += 10
