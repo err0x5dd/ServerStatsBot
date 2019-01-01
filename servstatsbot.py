@@ -25,10 +25,12 @@ cputhreshold = 85  # if total cpu usage more than this
 poll = 30  # seconds
 
 shellexecution = []
+authorized = []
 timelist = []
 memlist = []
 xaxis = []
 settingmemth = []
+settingcputh = []
 setpolling = []
 graphstart = datetime.now()
 
@@ -40,6 +42,8 @@ def clearall(chat_id):
         shellexecution.remove(chat_id)
     if chat_id in settingmemth:
         settingmemth.remove(chat_id)
+    if chat_id in settingcputh:
+        settingcputh.remove(chat_id)
     if chat_id in setpolling:
         setpolling.remove(chat_id)
 
@@ -60,6 +64,59 @@ def plotmemgraph(memlist, xaxis, tmperiod):
     f = open('/tmp/graph.png', 'rb')  # some file on local disk
     return f
 
+def func_help(chat_id):
+    bot.sendChatAction(chat_id, 'typing')
+    reply = "/help - gives this message\n" + \
+            "/stats - gives summed statistics about memory \\ disk \\ processes (will improve)\n" + \
+            "/shell - goes into the mode of executing shell commands & sends you the output\n" + \
+            "/memgraph - plots a graph of memory usage for a past period and sends you a picture of the graph\n" + \
+            "/setmem - set memory threshold (%) to monitor and notify if memory usage goes above it\n" + \
+            "/setcpu - set cpu threshold (%) to monitor and notify if cpu usage goes above it\n" + \
+            "/setpoll - set polling interval in seconds (higher than 10)\n"
+    bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
+
+def func_stats(chat_id):
+    bot.sendChatAction(chat_id, 'typing')
+    # time
+    boottime = datetime.fromtimestamp(psutil.boot_time())
+    now = datetime.now()
+    timedif = "Uptime: %.1f Hours" % (((now - boottime).total_seconds()) / 3600)
+    # memory
+    memory = psutil.virtual_memory()
+    memtotal = "%.2f" % (memory.total / 1024 / 1024 / 1024)
+    #memavail = "%.2f" % (memory.available / 1024 / 1024 / 1024)
+    memused = "%.2f" % (memory.used / 1024 / 1024 / 1024)
+    memuseperc = "(" + str(memory.percent) + " %)"
+    mem = "Memory: " + memused + "/" + memtotal + " GiB " + memuseperc
+    # disk
+    diskparts = psutil.disk_partitions()
+    diskusage = "Disk usage per mount:\n"
+    for part in diskparts:
+        mount = part.mountpoint
+        usage = psutil.disk_usage(mount)
+        usagetotal = "%.2f" % (usage.total / 1024 / 1024 / 1024)
+        #usagefree = "%.2f" % (usage.free / 1024 / 1024 / 1024)
+        usageused = "%.2f" % (usage.used / 1024 / 1024 / 1024)
+        usageperc = "(" + str(usage.percent) + " %)"
+        diskusage += mount + " " + usageused + "/" + usagetotal + " GiB " + usageperc + "\n"
+    # cpu
+    cpuperc = psutil.cpu_percent(percpu=True)
+    cpuusage = "CPU Usage:\n"
+    cpuid = 0
+    for cpu in cpuperc:
+        cpuusage += "CPU" + str(cpuid) + ": " + str(cpu) + " %\n"
+        cpuid += 1
+    cpuusage += "CPU Total: " + str(psutil.cpu_percent()) + " %"
+    # output
+    reply = timedif + "\n" + \
+            "---\n" + \
+            cpuusage + "\n" + \
+            "---\n" + \
+            mem + "\n" + \
+            "---\n" + \
+            diskusage + "\n"
+    bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
+
 class YourBot(telepot.Bot):
     def __init__(self, *args, **kwargs):
         super(YourBot, self).__init__(*args, **kwargs)
@@ -72,63 +129,29 @@ class YourBot(telepot.Bot):
         print("Your chat_id:" + str(chat_id)) # this will tell you your chat_id
         if chat_id in adminchatid:  # Store adminchatid variable in tokens.py
             if content_type == 'text':
-                if msg['text'] == '/help' and chat_id not in shellexecution:
-                    bot.sendChatAction(chat_id, 'typing')
-                    reply = "/stats - gives summed statistics about memory \\ disk \\ processes (will improve)\n" + \
-                            "/shell - goes into the mode of executing shell commands & sends you the output\n" + \
-                            "/memgraph - plots a graph of memory usage for a past period and sends you a picture of the graph\n" + \
-                            "/setmem - set memory threshold (%) to monitor and notify if memory usage goes above it\n" + \
-                            "/setpoll - set polling interval in seconds (higher than 10)\n"
-                    bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
-                if msg['text'] == '/stats' and chat_id not in shellexecution:
-                    bot.sendChatAction(chat_id, 'typing')
-                    # time
-                    boottime = datetime.fromtimestamp(psutil.boot_time())
-                    now = datetime.now()
-                    timedif = "Uptime: %.1f Hours" % (((now - boottime).total_seconds()) / 3600)
-                    # memory
-                    memory = psutil.virtual_memory()
-                    memtotal = "%.2f" % (memory.total / 1024 / 1024 / 1024)
-                    #memavail = "%.2f" % (memory.available / 1024 / 1024 / 1024)
-                    memused = "%.2f" % (memory.used / 1024 / 1024 / 1024)
-                    memuseperc = "(" + str(memory.percent) + " %)"
-                    mem = "Memory: " + memused + "/" + memtotal + " GiB " + memuseperc
-                    # disk
-                    diskparts = psutil.disk_partitions()
-                    diskusage = "Disk usage per mount:\n"
-                    for part in diskparts:
-                        mount = part.mountpoint
-                        usage = psutil.disk_usage(mount)
-                        usagetotal = "%.2f" % (usage.total / 1024 / 1024 / 1024)
-                        #usagefree = "%.2f" % (usage.free / 1024 / 1024 / 1024)
-                        usageused = "%.2f" % (usage.used / 1024 / 1024 / 1024)
-                        usageperc = "(" + str(usage.percent) + " %)"
-                        diskusage += mount + " " + usageused + "/" + usagetotal + " GiB " + usageperc + "\n"
-                    # cpu
-                    cpuperc = psutil.cpu_percent(percpu=True)
-                    cpuusage = "CPU Usage:\n"
-                    cpuid = 0
-                    for cpu in cpuperc:
-                        cpuusage += "CPU" + str(cpuid) + ": " + str(cpu) + " %\n"
-                        cpuid += 1
-                    cpuusage += "CPU Total: " + str(psutil.cpu_percent()) + " %"
-                    # output
-                    reply = timedif + "\n" + \
-                            "---\n" + \
-                            cpuusage + "\n" + \
-                            "---\n" + \
-                            mem + "\n" + \
-                            "---\n" + \
-                            diskusage + "\n"
-                    bot.sendMessage(chat_id, reply, disable_web_page_preview=True)
-                elif msg['text'] == "Stop":
+                if msg['text'].startswith('/start') and chat_id not in shellexecution and chat_id not in authorized:
+                    if startpw == '':
+                        authorized.append(chat_id)
+                        func_help(chat_id)
+                    elif msg['text'] == ('/start ' + startpw):
+                        authorized.append(chat_id)
+                        func_help(chat_id)
+                    else:
+                        bot.sendMessage(chat_id, "Wrong password!")
+                elif msg['text'] == '/stop' and chat_id not in shellexecution and chat_id in authorized:
+                    authorized.remove(chat_id)
+                elif msg['text'] == '/help' and chat_id not in shellexecution and chat_id in authorized:
+                    func_help(chat_id)
+                elif msg['text'] == '/stats' and chat_id not in shellexecution and chat_id in authorized:
+                    func_stats(chat_id)
+                elif msg['text'] == "Stop" and chat_id in authorized:
                     clearall(chat_id)
                     bot.sendMessage(chat_id, "All operations stopped.", reply_markup=hide_keyboard)
-                elif msg['text'] == '/setpoll' and chat_id not in setpolling:
+                elif msg['text'] == '/setpoll' and chat_id not in setpolling and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     setpolling.append(chat_id)
                     bot.sendMessage(chat_id, "Send me a new polling interval in seconds? (higher than 10)", reply_markup=stopmarkup)
-                elif chat_id in setpolling:
+                elif chat_id in setpolling and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     try:
                         global poll
@@ -140,14 +163,14 @@ class YourBot(telepot.Bot):
                             1/0
                     except:
                         bot.sendMessage(chat_id, "Please send a proper numeric value higher than 10.")
-                elif msg['text'] == "/shell" and chat_id not in shellexecution:
+                elif msg['text'] == "/shell" and chat_id not in shellexecution and chat_id in authorized:
                     bot.sendMessage(chat_id, "Send me a shell command to execute", reply_markup=stopmarkup)
                     shellexecution.append(chat_id)
-                elif msg['text'] == "/setmem" and chat_id not in settingmemth:
+                elif msg['text'] == "/setmem" and chat_id not in settingmemth and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     settingmemth.append(chat_id)
                     bot.sendMessage(chat_id, "Send me a new memory threshold to monitor?", reply_markup=stopmarkup)
-                elif chat_id in settingmemth:
+                elif chat_id in settingmemth and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     try:
                         global memorythreshold
@@ -159,8 +182,23 @@ class YourBot(telepot.Bot):
                             1/0
                     except:
                         bot.sendMessage(chat_id, "Please send a proper numeric value below 100.")
-
-                elif chat_id in shellexecution:
+                elif msg['text'] == "/setcpu" and chat_id not in settingcputh and chat_id in authorized:
+                    bot.sendChatAction(chat_id, 'typing')
+                    settingcputh.append(chat_id)
+                    bot.sendMessage(chat_id, "Send me a new cpu threshold to monitor?", reply_markup=stopmarkup)
+                elif chat_id in settingcputh and chat_id in authorized:
+                    bot.sendChatAction(chat_id, 'typing')
+                    try:
+                        global cputhreshold
+                        cputhreshold = int(msg['text'])
+                        if cputhreshold < 100:
+                            bot.sendMessage(chat_id, "All set!")
+                            clearall(chat_id)
+                        else:
+                            1/0
+                    except:
+                        bot.sendMessage(chat_id, "Please send a proper numeric value below 100.")
+                elif chat_id in shellexecution and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     p = Popen(msg['text'], shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
                     output = p.stdout.read()
@@ -168,7 +206,7 @@ class YourBot(telepot.Bot):
                         bot.sendMessage(chat_id, output, disable_web_page_preview=True)
                     else:
                         bot.sendMessage(chat_id, "No output.", disable_web_page_preview=True)
-                elif msg['text'] == '/memgraph':
+                elif msg['text'] == '/memgraph' and chat_id in authorized:
                     bot.sendChatAction(chat_id, 'typing')
                     tmperiod = "Last %.2f hours" % ((datetime.now() - graphstart).total_seconds() / 3600)
                     bot.sendPhoto(chat_id, plotmemgraph(memlist, xaxis, tmperiod))
